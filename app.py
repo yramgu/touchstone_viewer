@@ -8,13 +8,13 @@ from pages.touchstone_viewer import TouchStoneViewer
 
 def tool_about():
     st.header("ℹ️ About This App")
-    st.write("This is a collection of handy daily tools built in a single Streamlit file.")
+    st.write("This is a collection of handy RF tools built in a single Streamlit app.")
 
 # ----------------------------------------
 # Create the sidebar menu
 # ----------------------------------------
 
-st.sidebar.title("🧰 My Toolkit")
+st.sidebar.title("🧰 RF Toolkit")
 st.sidebar.write("Select a tool below:")
 
 # The selectbox returns the string the user clicked
