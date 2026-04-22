@@ -180,7 +180,7 @@ class TouchStoneViewer():
                         x=real, y=imag, 
                         mode='lines', 
                         name=selected_param,
-                        line=dict(color='cyan', width=2),
+                        line=dict(color='orange', width=2),
                         text=smith_hover,
                         hovertemplate="%{text}<extra></extra>"
                     ))
