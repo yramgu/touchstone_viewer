@@ -195,7 +195,7 @@ class TouchStoneViewer():
                         margin=dict(l=10, r=10, t=10, b=10)
                     )
                     
-                    st.plotly_chart(fig_smith, use_container_width=True)
+                    st.plotly_chart(fig_smith, width='stretch')
 
                 # Display raw data summary
                 with st.expander("View Network Summary"):

@@ -44,6 +44,13 @@ class FilterDesigner:
     def run(self):
         st.title("🎛️ RF Filter Designer")
 
+        st.info("""
+        **Quick Guide**
+        - **Approximation**: Select a topology (Butterworth, Chebyshev, etc.) to define the roll-off.
+        - **Frequency**: Define cutoffs or edges. f₀ and Bandwidth are derived automatically.
+        - **Implementation**: View the physical LC ladder schematic and download components as CSV.
+        """)
+
         # === Design controls ================================================
         # Row 1 — Topology / type / order / impedance
         st.markdown("##### Design")
@@ -154,10 +161,10 @@ class FilterDesigner:
         # --- Plots --------------------------------------------------------
         col_mag, col_phase = st.columns(2)
         with col_mag:
-            st.plotly_chart(self._mag_fig(sweep_hz, H, ftype, f1_mhz, f2_mhz), use_container_width=True)
+            st.plotly_chart(self._mag_fig(sweep_hz, H, ftype, f1_mhz, f2_mhz), width='stretch')
         with col_phase:
-            st.plotly_chart(self._phase_fig(sweep_hz, H), use_container_width=True)
-        st.plotly_chart(self._group_delay_fig(sweep_hz, H), use_container_width=True)
+            st.plotly_chart(self._phase_fig(sweep_hz, H), width='stretch')
+        st.plotly_chart(self._group_delay_fig(sweep_hz, H), width='stretch')
 
         # --- Summary metrics ----------------------------------------------
         mag_db = 20 * np.log10(np.maximum(np.abs(H), 1e-300))
@@ -174,11 +181,11 @@ class FilterDesigner:
         st.subheader("Export")
 
         # LC ladder
+        components = self._synthesize_ladder(topology, ftype, N, rip_db,
+                                             f1_mhz, f2_mhz, f0_mhz, bw_mhz, r0)
         ladder_cols = st.columns([2, 1])
         with ladder_cols[0]:
             st.markdown("#### Component Values (LC Ladder)")
-            components = self._synthesize_ladder(topology, ftype, N, rip_db,
-                                                 f1_mhz, f2_mhz, f0_mhz, bw_mhz, r0)
             if components is None:
                 st.info(
                     "LC ladder synthesis is only provided for Butterworth, Chebyshev I, "
@@ -187,16 +194,19 @@ class FilterDesigner:
                 )
             else:
                 self._render_component_table(components)
-                st.markdown(self.render_ladder_svg(components, r0), unsafe_allow_html=True)
 
-                csv_text = self._components_to_csv(components, topology, ftype, r0,
-                                                   f1_mhz, f2_mhz, f0_mhz, bw_mhz)
-                st.download_button(
-                    "Download components (CSV)",
-                    data=csv_text,
-                    file_name=f"{topology.lower().replace(' ', '')}_{ftype.lower()}_N{N}.csv",
-                    mime="text/csv",
-                )
+        if components is not None:
+            st.markdown("#### Implementation Schematic")
+            st.markdown(self.render_ladder_svg(components, r0), unsafe_allow_html=True)
+            
+            csv_text = self._components_to_csv(components, topology, ftype, r0,
+                                                f1_mhz, f2_mhz, f0_mhz, bw_mhz)
+            st.download_button(
+                "Download components (CSV)",
+                data=csv_text,
+                file_name=f"{topology.lower().replace(' ', '')}_{ftype.lower()}_N{N}.csv",
+                mime="text/csv",
+            )
 
         with ladder_cols[1]:
             st.markdown("#### Touchstone (.s2p)")
@@ -443,7 +453,7 @@ class FilterDesigner:
                 "Value": self._fmt_value(c),
                 "SI (base units)": f"{c['value']:.6e} {'H' if c['kind'] == 'L' else 'F'}",
             })
-        st.dataframe(rows, use_container_width=True, hide_index=True)
+        st.dataframe(rows, width='stretch', hide_index=True)
 
     @staticmethod
     def _components_to_csv(components, topology, ftype, r0, f1_mhz, f2_mhz, f0_mhz, bw_mhz):
@@ -510,18 +520,19 @@ class FilterDesigner:
             branches.append(grp)
             i = j
 
-        cell_w = 140
-        margin_x = 80
-        wire_y = 70
-        term_r = 7
-        source_x = 26
+        cell_w = 180
+        margin_x = 120
+        wire_y = 100
+        term_r = 12
+        side_padding = 80
+        source_x = side_padding
         has_shunt = any(b[0]["position"] == "shunt" for b in branches)
-        height = 220 if has_shunt else 140
-        width = max(520, margin_x * 2 + len(branches) * cell_w)
-        load_x = width - 26
+        height = 420 if has_shunt else 200
+        width = max(900, margin_x * 2 + len(branches) * cell_w)
+        load_x = width - side_padding
 
         positions = [margin_x + i * cell_w + cell_w // 2 for i in range(len(branches))]
-        series_half_w = 30
+        series_half_w = 40
 
         parts = [
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
@@ -537,34 +548,34 @@ class FilterDesigner:
             if b[0]["position"] == "series":
                 parts.append(
                     f'<line x1="{prev_x}" y1="{wire_y}" x2="{cx - series_half_w * len(b)}" y2="{wire_y}" '
-                    f'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity="0.7"/>'
+                    f'stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.7"/>'
                 )
                 prev_x = cx + series_half_w * len(b)
         parts.append(
             f'<line x1="{prev_x}" y1="{wire_y}" x2="{load_x}" y2="{wire_y}" '
-            f'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity="0.7"/>'
+            f'stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.7"/>'
         )
 
         # Terminals
         parts.append(
             f'<circle cx="{source_x}" cy="{wire_y}" r="{term_r}" fill="none" '
-            f'stroke="currentColor" stroke-width="2"/>'
+            f'stroke="currentColor" stroke-width="4"/>'
         )
         parts.append(
-            f'<text x="{source_x}" y="{wire_y - 16}" text-anchor="middle" font-size="11" '
+            f'<text x="{source_x}" y="{wire_y - 25}" text-anchor="middle" font-size="18" '
             f'font-weight="700" fill="currentColor">Source</text>'
         )
         parts.append(
-            f'<text x="{source_x}" y="{wire_y + 24}" text-anchor="middle" font-size="10" '
+            f'<text x="{source_x}" y="{wire_y + 45}" text-anchor="middle" font-size="16" '
             f'fill="currentColor" opacity="0.75">{r0:.0f} Ω</text>'
         )
         parts.append(f'<circle cx="{load_x}" cy="{wire_y}" r="{term_r}" fill="currentColor"/>')
         parts.append(
-            f'<text x="{load_x}" y="{wire_y - 16}" text-anchor="middle" font-size="11" '
+            f'<text x="{load_x}" y="{wire_y - 25}" text-anchor="middle" font-size="18" '
             f'font-weight="700" fill="currentColor">Load</text>'
         )
         parts.append(
-            f'<text x="{load_x}" y="{wire_y + 24}" text-anchor="middle" font-size="10" '
+            f'<text x="{load_x}" y="{wire_y + 45}" text-anchor="middle" font-size="16" '
             f'fill="currentColor" opacity="0.75">{r0:.0f} Ω</text>'
         )
 
@@ -585,7 +596,7 @@ class FilterDesigner:
                         parts.extend(self._series_C_svg(slot_cx, wire_y, series_half_w, color))
                     label = f'{c["label"]} = {self._fmt_value(c)}'
                     parts.append(
-                        f'<text x="{slot_cx}" y="{wire_y - 22}" text-anchor="middle" font-size="10" '
+                        f'<text x="{slot_cx}" y="{wire_y - 35}" text-anchor="middle" font-size="16" '
                         f'font-weight="600" fill="{color}">{label}</text>'
                     )
             else:  # shunt branch — stack components vertically from wire to ground
@@ -600,27 +611,27 @@ class FilterDesigner:
                     parts.extend(svg_parts)
                     label = f'{c["label"]} = {self._fmt_value(c)}'
                     parts.append(
-                        f'<text x="{cx + 20}" y="{(segment_y + next_y) / 2 + 4}" text-anchor="start" '
-                        f'font-size="10" font-weight="600" fill="{color}">{label}</text>'
+                        f'<text x="{cx + 35}" y="{(segment_y + next_y) / 2 + 6}" text-anchor="start" '
+                        f'font-size="16" font-weight="600" fill="{color}">{label}</text>'
                     )
                     segment_y = next_y
                 # Ground symbol at bottom
-                gy = segment_y + 8
+                gy = segment_y + 40
                 parts.append(
                     f'<line x1="{cx}" y1="{segment_y}" x2="{cx}" y2="{gy}" '
-                    f'stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+                    f'stroke="currentColor" stroke-width="3" stroke-linecap="round"/>'
                 )
                 parts.append(
-                    f'<line x1="{cx - 10}" y1="{gy}" x2="{cx + 10}" y2="{gy}" '
-                    f'stroke="currentColor" stroke-width="1.8" opacity="0.7"/>'
+                    f'<line x1="{cx - 15}" y1="{gy}" x2="{cx + 15}" y2="{gy}" '
+                    f'stroke="currentColor" stroke-width="2.5" opacity="0.7"/>'
                 )
                 parts.append(
-                    f'<line x1="{cx - 6}" y1="{gy + 4}" x2="{cx + 6}" y2="{gy + 4}" '
-                    f'stroke="currentColor" stroke-width="1.8" opacity="0.7"/>'
+                    f'<line x1="{cx - 10}" y1="{gy + 8}" x2="{cx + 10}" y2="{gy + 8}" '
+                    f'stroke="currentColor" stroke-width="2.5" opacity="0.7"/>'
                 )
                 parts.append(
-                    f'<line x1="{cx - 3}" y1="{gy + 8}" x2="{cx + 3}" y2="{gy + 8}" '
-                    f'stroke="currentColor" stroke-width="1.8" opacity="0.7"/>'
+                    f'<line x1="{cx - 5}" y1="{gy + 16}" x2="{cx + 5}" y2="{gy + 16}" '
+                    f'stroke="currentColor" stroke-width="2.5" opacity="0.7"/>'
                 )
 
         parts.append("</svg>")
@@ -637,52 +648,52 @@ class FilterDesigner:
 
     @staticmethod
     def _series_L_svg(cx, cy, half_w, color):
-        r = 4
+        r = 8
         coil_w = 8 * r
         x0 = cx - coil_w / 2
         x1 = cx + coil_w / 2
         path = f"M {x0},{cy} " + " ".join(f"a {r},{r} 0 0,1 {2 * r},0" for _ in range(4))
         return [
-            f'<line x1="{cx - half_w}" y1="{cy}" x2="{x0}" y2="{cy}" stroke="{color}" stroke-width="2" stroke-linecap="round"/>',
-            f'<path d="{path}" fill="none" stroke="{color}" stroke-width="2.2" stroke-linecap="round"/>',
-            f'<line x1="{x1}" y1="{cy}" x2="{cx + half_w}" y2="{cy}" stroke="{color}" stroke-width="2" stroke-linecap="round"/>',
+            f'<line x1="{cx - half_w}" y1="{cy}" x2="{x0}" y2="{cy}" stroke="{color}" stroke-width="3" stroke-linecap="round"/>',
+            f'<path d="{path}" fill="none" stroke="{color}" stroke-width="3.5" stroke-linecap="round"/>',
+            f'<line x1="{x1}" y1="{cy}" x2="{cx + half_w}" y2="{cy}" stroke="{color}" stroke-width="3" stroke-linecap="round"/>',
         ]
 
     @staticmethod
     def _series_C_svg(cx, cy, half_w, color):
-        gap = 5
-        plate_h = 16
+        gap = 9
+        plate_h = 32
         return [
-            f'<line x1="{cx - half_w}" y1="{cy}" x2="{cx - gap}" y2="{cy}" stroke="{color}" stroke-width="2" stroke-linecap="round"/>',
-            f'<line x1="{cx - gap}" y1="{cy - plate_h / 2}" x2="{cx - gap}" y2="{cy + plate_h / 2}" stroke="{color}" stroke-width="2.6" stroke-linecap="round"/>',
-            f'<line x1="{cx + gap}" y1="{cy - plate_h / 2}" x2="{cx + gap}" y2="{cy + plate_h / 2}" stroke="{color}" stroke-width="2.6" stroke-linecap="round"/>',
-            f'<line x1="{cx + gap}" y1="{cy}" x2="{cx + half_w}" y2="{cy}" stroke="{color}" stroke-width="2" stroke-linecap="round"/>',
+            f'<line x1="{cx - half_w}" y1="{cy}" x2="{cx - gap}" y2="{cy}" stroke="{color}" stroke-width="3" stroke-linecap="round"/>',
+            f'<line x1="{cx - gap}" y1="{cy - plate_h / 2}" x2="{cx - gap}" y2="{cy + plate_h / 2}" stroke="{color}" stroke-width="4.5" stroke-linecap="round"/>',
+            f'<line x1="{cx + gap}" y1="{cy - plate_h / 2}" x2="{cx + gap}" y2="{cy + plate_h / 2}" stroke="{color}" stroke-width="4.5" stroke-linecap="round"/>',
+            f'<line x1="{cx + gap}" y1="{cy}" x2="{cx + half_w}" y2="{cy}" stroke="{color}" stroke-width="3" stroke-linecap="round"/>',
         ]
 
     @staticmethod
     def _shunt_L_segment(cx, y_top, color):
-        stub = 12
-        r = 4
+        stub = 40
+        r = 8
         coil_h = 8 * r
         y_start = y_top + stub
         y_end = y_start + coil_h
         path = f"M {cx},{y_start} " + " ".join(f"a {r},{r} 0 0,0 0,{2 * r}" for _ in range(4))
         return [
-            f'<line x1="{cx}" y1="{y_top}" x2="{cx}" y2="{y_start}" stroke="{color}" stroke-width="2" stroke-linecap="round"/>',
-            f'<path d="{path}" fill="none" stroke="{color}" stroke-width="2.2" stroke-linecap="round"/>',
+            f'<line x1="{cx}" y1="{y_top}" x2="{cx}" y2="{y_start}" stroke="{color}" stroke-width="3" stroke-linecap="round"/>',
+            f'<path d="{path}" fill="none" stroke="{color}" stroke-width="3.5" stroke-linecap="round"/>',
         ], y_end
 
     @staticmethod
     def _shunt_C_segment(cx, y_top, color):
-        stub = 16
-        plate_gap = 10
-        plate_w = 18
+        stub = 45
+        plate_gap = 16
+        plate_w = 32
         y_p1 = y_top + stub
         y_p2 = y_p1 + plate_gap
         return [
-            f'<line x1="{cx}" y1="{y_top}" x2="{cx}" y2="{y_p1}" stroke="{color}" stroke-width="2" stroke-linecap="round"/>',
-            f'<line x1="{cx - plate_w / 2}" y1="{y_p1}" x2="{cx + plate_w / 2}" y2="{y_p1}" stroke="{color}" stroke-width="2.6" stroke-linecap="round"/>',
-            f'<line x1="{cx - plate_w / 2}" y1="{y_p2}" x2="{cx + plate_w / 2}" y2="{y_p2}" stroke="{color}" stroke-width="2.6" stroke-linecap="round"/>',
+            f'<line x1="{cx}" y1="{y_top}" x2="{cx}" y2="{y_p1}" stroke="{color}" stroke-width="3" stroke-linecap="round"/>',
+            f'<line x1="{cx - plate_w / 2}" y1="{y_p1}" x2="{cx + plate_w / 2}" y2="{y_p1}" stroke="{color}" stroke-width="4.5" stroke-linecap="round"/>',
+            f'<line x1="{cx - plate_w / 2}" y1="{y_p2}" x2="{cx + plate_w / 2}" y2="{y_p2}" stroke="{color}" stroke-width="4.5" stroke-linecap="round"/>',
         ], y_p2
 
 

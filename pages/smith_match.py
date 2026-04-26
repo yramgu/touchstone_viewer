@@ -32,6 +32,13 @@ class RfMatcher():
     def run(self):
         st.title("🎯 Simple RF Matcher")
 
+        st.info("""
+        **Quick Guide**
+        - **Place Load**: Upload an **S1P file** or click the chart to place the Load manually.
+        - **Series/Shunt**: Move the mouse to preview paths; click to commit components. Sections alternate.
+        - **Undo**: **Right-click** the chart to remove the latest node.
+        """)
+
         # ---- Controls row ---------------------------------------------------
         ctl_freq, ctl_btn, _ = st.columns([1, 0.33, 2.67])
         with ctl_freq:
@@ -43,7 +50,7 @@ class RfMatcher():
             ) == "On"
         with ctl_btn:
             st.markdown("<div style='height:1.7em'></div>", unsafe_allow_html=True)
-            if st.button("Reset", use_container_width=True):
+            if st.button("Reset", width='stretch'):
                 st.session_state.points = []
                 st.session_state.step = 1
                 st.session_state.last_click_id = 0
@@ -74,16 +81,6 @@ class RfMatcher():
 
         # Step always derived from current point count.
         st.session_state.step = self._step_from_count(len(st.session_state.points))
-
-        # ---- Instructions ---------------------------------------------------
-        st.markdown("""
-**Instructions**
-- Upload an S1P file (Load will snap to the closest frequency sample) or click the chart to place the Load manually
-- **Series** step: move the mouse to preview the Const-R arc, click to commit
-- **Shunt** step: move the mouse to preview the Const-G arc, click to commit
-- **Right-click** the chart to undo the latest matching node (an S1P-derived Load is protected)
-- Series/Shunt alternate — keep clicking to add L-sections
-""")
 
         # ---- Top chart ------------------------------------------------------
         trace_measured, trace_highlight_idx = self._measured_trace(freq_hz)
@@ -397,18 +394,19 @@ class RfMatcher():
             return ""
 
         # Layout constants
-        cell_w = 110
-        margin_x = 80
-        wire_y = 55
-        term_r = 7
-        source_x = 26
-        width = max(460, margin_x * 2 + n * cell_w)
-        load_x = width - 26
+        cell_w = 180
+        margin_x = 120
+        wire_y = 100
+        term_r = 12
+        side_padding = 80
+        source_x = side_padding
+        width = max(900, margin_x * 2 + n * cell_w)
+        load_x = width - side_padding
         has_shunt = any(c["position"] == "shunt" for c in components_s2l)
-        height = 150 if has_shunt else 95
+        height = 300 if has_shunt else 200
 
         positions = [margin_x + i * cell_w + cell_w // 2 for i in range(n)]
-        series_half_w = 22
+        series_half_w = 40
 
         parts = [
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
@@ -424,25 +422,25 @@ class RfMatcher():
             if c["position"] == "series":
                 parts.append(
                     f'<line x1="{prev_x}" y1="{wire_y}" x2="{cx - series_half_w}" y2="{wire_y}" '
-                    f'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity="0.7"/>'
+                    f'stroke="currentColor" stroke-width="3.5" stroke-linecap="round" opacity="0.7"/>'
                 )
                 prev_x = cx + series_half_w
         parts.append(
             f'<line x1="{prev_x}" y1="{wire_y}" x2="{load_x}" y2="{wire_y}" '
-            f'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity="0.7"/>'
+            f'stroke="currentColor" stroke-width="3.5" stroke-linecap="round" opacity="0.7"/>'
         )
 
         # Source terminal (open circle + label + 50 Ω)
         parts.append(
             f'<circle cx="{source_x}" cy="{wire_y}" r="{term_r}" fill="none" '
-            f'stroke="currentColor" stroke-width="2"/>'
+            f'stroke="currentColor" stroke-width="4"/>'
         )
         parts.append(
-            f'<text x="{source_x}" y="{wire_y - 14}" text-anchor="middle" font-size="11" '
+            f'<text x="{source_x}" y="{wire_y - 30}" text-anchor="middle" font-size="18" '
             f'font-weight="700" fill="currentColor">Source</text>'
         )
         parts.append(
-            f'<text x="{source_x}" y="{wire_y + 24}" text-anchor="middle" font-size="10" '
+            f'<text x="{source_x}" y="{wire_y + 45}" text-anchor="middle" font-size="16" '
             f'fill="currentColor" opacity="0.75">50 Ω</text>'
         )
 
@@ -451,12 +449,12 @@ class RfMatcher():
             f'<circle cx="{load_x}" cy="{wire_y}" r="{term_r}" fill="currentColor"/>'
         )
         parts.append(
-            f'<text x="{load_x}" y="{wire_y - 14}" text-anchor="middle" font-size="11" '
+            f'<text x="{load_x}" y="{wire_y - 30}" text-anchor="middle" font-size="18" '
             f'font-weight="700" fill="currentColor">Load</text>'
         )
         sign = "+" if load_z.imag >= 0 else "-"
         parts.append(
-            f'<text x="{load_x}" y="{wire_y + 24}" text-anchor="middle" font-size="10" '
+            f'<text x="{load_x}" y="{wire_y + 45}" text-anchor="middle" font-size="16" '
             f'fill="currentColor" opacity="0.75">{load_z.real:.0f} {sign} j{abs(load_z.imag):.0f} Ω</text>'
         )
 
@@ -472,8 +470,8 @@ class RfMatcher():
                 else:
                     parts.extend(self._series_C_svg(cx, wire_y, series_half_w, color))
                 parts.append(
-                    f'<text x="{cx}" y="{wire_y - 20}" text-anchor="middle" font-size="11" '
-                    f'font-weight="600" fill="{color}">{label}</text>'
+                    f'<text x="{cx}" y="{wire_y - 40}" text-anchor="middle" font-size="16" '
+                    f'font-weight="700" fill="{color}">{label}</text>'
                 )
             else:  # shunt
                 if c["kind"] == "L":
@@ -481,8 +479,8 @@ class RfMatcher():
                 else:
                     parts.extend(self._shunt_C_svg(cx, wire_y, color))
                 parts.append(
-                    f'<text x="{cx + 18}" y="{wire_y + 45}" text-anchor="start" font-size="11" '
-                    f'font-weight="600" fill="{color}">{label}</text>'
+                    f'<text x="{cx + 35}" y="{wire_y + 85}" text-anchor="start" font-size="16" '
+                    f'font-weight="700" fill="{color}">{label}</text>'
                 )
 
         parts.append('</svg>')
@@ -497,68 +495,68 @@ class RfMatcher():
     @staticmethod
     def _series_L_svg(cx, cy, half_w, color):
         """Inline inductor — 4 semicircular humps + short stubs."""
-        r = 4
+        r = 8
         coil_w = 8 * r
         x0 = cx - coil_w / 2
         x1 = cx + coil_w / 2
         path = f"M {x0},{cy} " + " ".join(f"a {r},{r} 0 0,1 {2 * r},0" for _ in range(4))
         return [
-            f'<line x1="{cx - half_w}" y1="{cy}" x2="{x0}" y2="{cy}" stroke="{color}" stroke-width="2" stroke-linecap="round"/>',
-            f'<path d="{path}" fill="none" stroke="{color}" stroke-width="2.2" stroke-linecap="round"/>',
-            f'<line x1="{x1}" y1="{cy}" x2="{cx + half_w}" y2="{cy}" stroke="{color}" stroke-width="2" stroke-linecap="round"/>',
+            f'<line x1="{cx - half_w}" y1="{cy}" x2="{x0}" y2="{cy}" stroke="{color}" stroke-width="3" stroke-linecap="round"/>',
+            f'<path d="{path}" fill="none" stroke="{color}" stroke-width="3.5" stroke-linecap="round"/>',
+            f'<line x1="{x1}" y1="{cy}" x2="{cx + half_w}" y2="{cy}" stroke="{color}" stroke-width="3" stroke-linecap="round"/>',
         ]
 
     @staticmethod
     def _series_C_svg(cx, cy, half_w, color):
         """Inline capacitor — two vertical plates with small gap."""
-        gap = 5
-        plate_h = 16
+        gap = 9
+        plate_h = 32
         return [
-            f'<line x1="{cx - half_w}" y1="{cy}" x2="{cx - gap}" y2="{cy}" stroke="{color}" stroke-width="2" stroke-linecap="round"/>',
-            f'<line x1="{cx - gap}" y1="{cy - plate_h / 2}" x2="{cx - gap}" y2="{cy + plate_h / 2}" stroke="{color}" stroke-width="2.6" stroke-linecap="round"/>',
-            f'<line x1="{cx + gap}" y1="{cy - plate_h / 2}" x2="{cx + gap}" y2="{cy + plate_h / 2}" stroke="{color}" stroke-width="2.6" stroke-linecap="round"/>',
-            f'<line x1="{cx + gap}" y1="{cy}" x2="{cx + half_w}" y2="{cy}" stroke="{color}" stroke-width="2" stroke-linecap="round"/>',
+            f'<line x1="{cx - half_w}" y1="{cy}" x2="{cx - gap}" y2="{cy}" stroke="{color}" stroke-width="3" stroke-linecap="round"/>',
+            f'<line x1="{cx - gap}" y1="{cy - plate_h / 2}" x2="{cx - gap}" y2="{cy + plate_h / 2}" stroke="{color}" stroke-width="4.5" stroke-linecap="round"/>',
+            f'<line x1="{cx + gap}" y1="{cy - plate_h / 2}" x2="{cx + gap}" y2="{cy + plate_h / 2}" stroke="{color}" stroke-width="4.5" stroke-linecap="round"/>',
+            f'<line x1="{cx + gap}" y1="{cy}" x2="{cx + half_w}" y2="{cy}" stroke="{color}" stroke-width="3" stroke-linecap="round"/>',
         ]
 
     @staticmethod
     def _shunt_L_svg(cx, wire_y, color):
         """Shunt inductor dropping to ground — vertical coil with stubs on both sides."""
-        tap_h = 20        # stub between main wire and coil
-        bot_stub = 20     # stub between coil and ground
-        r = 4
+        tap_h = 40        # stub between main wire and coil
+        bot_stub = 40     # stub between coil and ground
+        r = 8
         coil_h = 8 * r
         y_start = wire_y + tap_h
         y_end = y_start + coil_h
         path = f"M {cx},{y_start} " + " ".join(f"a {r},{r} 0 0,0 0,{2 * r}" for _ in range(4))
         gy = y_end + bot_stub
         return [
-            f'<line x1="{cx}" y1="{wire_y}" x2="{cx}" y2="{y_start}" stroke="{color}" stroke-width="2" stroke-linecap="round"/>',
-            f'<path d="{path}" fill="none" stroke="{color}" stroke-width="2.2" stroke-linecap="round"/>',
-            f'<line x1="{cx}" y1="{y_end}" x2="{cx}" y2="{gy}" stroke="{color}" stroke-width="2" stroke-linecap="round"/>',
+            f'<line x1="{cx}" y1="{wire_y}" x2="{cx}" y2="{y_start}" stroke="{color}" stroke-width="3" stroke-linecap="round"/>',
+            f'<path d="{path}" fill="none" stroke="{color}" stroke-width="3.5" stroke-linecap="round"/>',
+            f'<line x1="{cx}" y1="{y_end}" x2="{cx}" y2="{gy}" stroke="{color}" stroke-width="3" stroke-linecap="round"/>',
             # Ground symbol: three horizontal lines of decreasing width
-            f'<line x1="{cx - 10}" y1="{gy}" x2="{cx + 10}" y2="{gy}" stroke="currentColor" stroke-width="1.8" opacity="0.7"/>',
-            f'<line x1="{cx - 6}" y1="{gy + 4}" x2="{cx + 6}" y2="{gy + 4}" stroke="currentColor" stroke-width="1.8" opacity="0.7"/>',
-            f'<line x1="{cx - 3}" y1="{gy + 8}" x2="{cx + 3}" y2="{gy + 8}" stroke="currentColor" stroke-width="1.8" opacity="0.7"/>',
+            f'<line x1="{cx - 15}" y1="{gy}" x2="{cx + 15}" y2="{gy}" stroke="currentColor" stroke-width="2.5" opacity="0.7"/>',
+            f'<line x1="{cx - 10}" y1="{gy + 6}" x2="{cx + 10}" y2="{gy + 6}" stroke="currentColor" stroke-width="2.5" opacity="0.7"/>',
+            f'<line x1="{cx - 5}" y1="{gy + 12}" x2="{cx + 5}" y2="{gy + 12}" stroke="currentColor" stroke-width="2.5" opacity="0.7"/>',
         ]
 
     @staticmethod
     def _shunt_C_svg(cx, wire_y, color):
         """Shunt capacitor dropping to ground — two horizontal plates with stubs on both sides."""
-        tap_h = 30       # stub between main wire and top plate
-        plate_gap = 10    # separation between plates
-        bot_stub = 30     # stub between bottom plate and ground
-        plate_w = 18
+        tap_h = 50       # stub between main wire and top plate
+        plate_gap = 16    # separation between plates
+        bot_stub = 50     # stub between bottom plate and ground
+        plate_w = 32
         y_top = wire_y + tap_h
         y_bot = y_top + plate_gap
         gy = y_bot + bot_stub
         return [
-            f'<line x1="{cx}" y1="{wire_y}" x2="{cx}" y2="{y_top}" stroke="{color}" stroke-width="2" stroke-linecap="round"/>',
-            f'<line x1="{cx - plate_w / 2}" y1="{y_top}" x2="{cx + plate_w / 2}" y2="{y_top}" stroke="{color}" stroke-width="2.6" stroke-linecap="round"/>',
-            f'<line x1="{cx - plate_w / 2}" y1="{y_bot}" x2="{cx + plate_w / 2}" y2="{y_bot}" stroke="{color}" stroke-width="2.6" stroke-linecap="round"/>',
-            f'<line x1="{cx}" y1="{y_bot}" x2="{cx}" y2="{gy}" stroke="{color}" stroke-width="2" stroke-linecap="round"/>',
-            f'<line x1="{cx - 10}" y1="{gy}" x2="{cx + 10}" y2="{gy}" stroke="currentColor" stroke-width="1.8" opacity="0.7"/>',
-            f'<line x1="{cx - 6}" y1="{gy + 4}" x2="{cx + 6}" y2="{gy + 4}" stroke="currentColor" stroke-width="1.8" opacity="0.7"/>',
-            f'<line x1="{cx - 3}" y1="{gy + 8}" x2="{cx + 3}" y2="{gy + 8}" stroke="currentColor" stroke-width="1.8" opacity="0.7"/>',
+            f'<line x1="{cx}" y1="{wire_y}" x2="{cx}" y2="{y_top}" stroke="{color}" stroke-width="3" stroke-linecap="round"/>',
+            f'<line x1="{cx - plate_w / 2}" y1="{y_top}" x2="{cx + plate_w / 2}" y2="{y_top}" stroke="{color}" stroke-width="4.5" stroke-linecap="round"/>',
+            f'<line x1="{cx - plate_w / 2}" y1="{y_bot}" x2="{cx + plate_w / 2}" y2="{y_bot}" stroke="{color}" stroke-width="4.5" stroke-linecap="round"/>',
+            f'<line x1="{cx}" y1="{y_bot}" x2="{cx}" y2="{gy}" stroke="{color}" stroke-width="3" stroke-linecap="round"/>',
+            f'<line x1="{cx - 15}" y1="{gy}" x2="{cx + 15}" y2="{gy}" stroke="currentColor" stroke-width="2.5" opacity="0.7"/>',
+            f'<line x1="{cx - 10}" y1="{gy + 6}" x2="{cx + 10}" y2="{gy + 6}" stroke="currentColor" stroke-width="2.5" opacity="0.7"/>',
+            f'<line x1="{cx - 5}" y1="{gy + 12}" x2="{cx + 5}" y2="{gy + 12}" stroke="currentColor" stroke-width="2.5" opacity="0.7"/>',
         ]
 
 

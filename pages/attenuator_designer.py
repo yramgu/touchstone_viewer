@@ -18,51 +18,55 @@ class AttenuatorDesigner:
 
         st.info("""
         **Quick Guide**
-        - Select a **Topology**, set the desired **Attenuation**, and the **Attenuator Z₀**.
-        - Specify **Source** and **Load** impedances independently to see mismatch effects.
+        - Select a **Topology**, set the desired **Attenuation**, and the **Source (Zs)** and **Load (ZL)** impedances.
+        - The attenuator components are calculated assuming the attenuator is designed for the **Source Impedance (Zs)**.
+        - If **Zs ≠ ZL**, the S-parameter plots will show the effect of the impedance mismatch at the load.
         - Component values will be calculated and displayed.
         - S-parameter plots verify performance (S₂₁ Gain and S₁₁ Return Loss).
         """)
 
         # --- Configuration ---
         st.markdown("##### Configuration")
-        c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 1])
+        c1, c2, c3, c4 = st.columns(4) # Removed the Z0 input, so 4 columns instead of 5
         with c1:
             topology = st.selectbox("Topology", TOPOLOGIES, index=0)
         with c2:
             attenuation_db = st.number_input("Attenuation (dB)", value=10.0, min_value=0.1, max_value=60.0, step=1.0)
         with c3:
-            characteristic_impedance_z0 = st.number_input("Attenuator Z₀ (Ω)", value=50.0, min_value=1.0, step=10.0)
-        with c4:
             source_impedance_zs = st.number_input("Source Zs (Ω)", value=50.0, min_value=1.0, step=10.0)
-        with c5:
+        with c4:
             load_impedance_zl = st.number_input("Load ZL (Ω)", value=50.0, min_value=1.0, step=10.0)
 
         # --- Calculations ---
         K = 10**(attenuation_db / 20)
 
+        # Use source_impedance_zs as the design impedance for the attenuator.
+        # This assumes a symmetric attenuator designed for Zs, and ZL is just the load connected.
+        # If Zs != ZL, the attenuator will not be perfectly matched at the load side.
+        design_impedance_z0 = source_impedance_zs
+
         try:
             if topology == "T-Pad":
-                R1 = characteristic_impedance_z0 * (K - 1) / (K + 1)
-                R2 = 2 * characteristic_impedance_z0 * K / (K**2 - 1)
+                R1 = design_impedance_z0 * (K - 1) / (K + 1)
+                R2 = 2 * design_impedance_z0 * K / (K**2 - 1)
                 resistor_values = {"R1": R1, "R2": R2}
             elif topology == "Pi-Pad":
-                R1 = characteristic_impedance_z0 * (K + 1) / (K - 1) 
-                R2 = characteristic_impedance_z0 * (K**2 - 1) / (2 * K)
+                R1 = design_impedance_z0 * (K + 1) / (K - 1) 
+                R2 = design_impedance_z0 * (K**2 - 1) / (2 * K)
                 resistor_values = {"R1": R1, "R2": R2}
             elif topology == "Bridged-T Pad":
-                R1 = characteristic_impedance_z0
-                R2 = characteristic_impedance_z0 / (K - 1)
-                R3 = characteristic_impedance_z0 * (K - 1)
+                R1 = design_impedance_z0
+                R2 = design_impedance_z0 / (K - 1)
+                R3 = design_impedance_z0 * (K - 1)
                 resistor_values = {"R1": R1, "R2": R2, "R3": R3}
             else:
                 st.error("Unknown topology.")
                 st.stop()
             
-            # Calculate ABCD matrix for a matched symmetric attenuator with Z0 and K
+            # Calculate ABCD matrix for a symmetric attenuator with design_impedance_z0 and K
             A = (K**2 + 1) / (2 * K)
-            B = characteristic_impedance_z0 * (K**2 - 1) / (2 * K)
-            C = (1 / characteristic_impedance_z0) * (K**2 - 1) / (2 * K)
+            B = design_impedance_z0 * (K**2 - 1) / (2 * K)
+            C = (1 / design_impedance_z0) * (K**2 - 1) / (2 * K)
             D = A
             
             S11, S21, S22 = self._abcd_to_s_params(A, B, C, D, source_impedance_zs, load_impedance_zl)
@@ -73,6 +77,11 @@ class AttenuatorDesigner:
         except Exception as e:
             st.error(f"Calculation Error: {e}. Please check your inputs.")
             st.stop()
+
+        # Warning for Zs != ZL
+        if source_impedance_zs != load_impedance_zl:
+            st.warning(f"⚠️ **Impedance Mismatch**: The attenuator is designed for Zs ({source_impedance_zs:.0f} Ω). "
+                       f"Connecting a load of ZL ({load_impedance_zl:.0f} Ω) will result in a mismatch at the output.")
 
         # --- Display Component Values ---
         st.markdown("##### Component Values")
@@ -94,11 +103,11 @@ class AttenuatorDesigner:
         st.markdown("---")
         st.subheader("Implementation Schematic")
         if topology == "T-Pad":
-            st.components.v1.html(self._t_pad_svg(resistor_values, source_impedance_zs, load_impedance_zl), height=170)
+            st.markdown(self._t_pad_svg(resistor_values, source_impedance_zs, load_impedance_zl), unsafe_allow_html=True)
         elif topology == "Pi-Pad":
-            st.components.v1.html(self._pi_pad_svg(resistor_values, source_impedance_zs, load_impedance_zl), height=170)
+            st.markdown(self._pi_pad_svg(resistor_values, source_impedance_zs, load_impedance_zl), unsafe_allow_html=True)
         elif topology == "Bridged-T Pad":
-            st.components.v1.html(self._bridged_t_pad_svg(resistor_values, source_impedance_zs, load_impedance_zl), height=200)
+            st.markdown(self._bridged_t_pad_svg(resistor_values, source_impedance_zs, load_impedance_zl), unsafe_allow_html=True)
 
         # --- S-Parameter Plots ---
         st.markdown("---")
@@ -122,7 +131,7 @@ class AttenuatorDesigner:
             height=380,
             template="plotly_dark"
         )
-        st.plotly_chart(fig_s21, use_container_width=True)
+        st.plotly_chart(fig_s21, width='stretch')
 
         # S11 (Return Loss)
         fig_s11 = go.Figure()
@@ -141,7 +150,7 @@ class AttenuatorDesigner:
             height=380,
             template="plotly_dark"
         )
-        st.plotly_chart(fig_s11, use_container_width=True)
+        st.plotly_chart(fig_s11, width='stretch')
 
     # ==========================================================================
     # S-parameter calculations
@@ -174,20 +183,20 @@ class AttenuatorDesigner:
         r1_val = self._fmt_resistor_value(values.get("R1", 0))
         r2_val = self._fmt_resistor_value(values.get("R2", 0))
         return textwrap.dedent(f"""
-        <svg width="100%" height="150" viewBox="0 0 600 150" xmlns="http://www.w3.org/2000/svg" style="background:#111; border-radius:8px; display:block; margin:auto;">
-            <text x="20" y="30" fill="#888" font-size="12" font-weight="bold">T-PAD ATTENUATOR</text>
-            <text x="10" y="75" fill="#fff" font-size="14">IN</text>
-            <text x="570" y="75" fill="#fff" font-size="14">OUT</text>
-            <text x="40" y="95" text-anchor="middle" fill="#888" font-size="10">Zs={zs:.0f}Ω</text>
-            <text x="560" y="95" text-anchor="middle" fill="#888" font-size="10">ZL={zl:.0f}Ω</text>
-            <line x1="60" y1="70" x2="150" y2="70" stroke="#fff" stroke-width="2"/>
-            <line x1="250" y1="70" x2="350" y2="70" stroke="#fff" stroke-width="2"/>
-            <line x1="450" y1="70" x2="540" y2="70" stroke="#fff" stroke-width="2"/>
-            {self._draw_resistor(150, 70, 100, 0, r1_val)}
-            <line x1="300" y1="70" x2="300" y2="100" stroke="#fff" stroke-width="2"/>
-            {self._draw_resistor(300, 100, 0, 30, r2_val)}
-            {self._draw_ground(300, 130)}
-            {self._draw_resistor(350, 70, 100, 0, r1_val)}
+        <svg width="100%" height="220" viewBox="0 0 600 220" xmlns="http://www.w3.org/2000/svg" style="background:#111; border-radius:8px; display:block; margin:auto;">
+            <text x="20" y="40" fill="#888" font-size="16" font-weight="bold">T-PAD ATTENUATOR</text>
+            <text x="10" y="105" fill="#fff" font-size="18">IN</text>
+            <text x="560" y="105" fill="#fff" font-size="18">OUT</text>
+            <text x="40" y="140" text-anchor="middle" fill="#888" font-size="18">Zs={zs:.0f}Ω</text>
+            <text x="560" y="140" text-anchor="middle" fill="#888" font-size="18">ZL={zl:.0f}Ω</text>
+            <line x1="60" y1="100" x2="150" y2="100" stroke="#fff" stroke-width="3"/>
+            <line x1="250" y1="100" x2="350" y2="100" stroke="#fff" stroke-width="3"/>
+            <line x1="450" y1="100" x2="540" y2="100" stroke="#fff" stroke-width="3"/>
+            {self._draw_resistor(150, 100, 100, 0, r1_val)}
+            <line x1="300" y1="100" x2="300" y2="140" stroke="#fff" stroke-width="3"/>
+            {self._draw_resistor(300, 140, 0, 40, r2_val)}
+            {self._draw_ground(300, 180)}
+            {self._draw_resistor(350, 100, 100, 0, r1_val)}
         </svg>
         """).strip()
 
@@ -195,21 +204,21 @@ class AttenuatorDesigner:
         r1_val = self._fmt_resistor_value(values.get("R1", 0))
         r2_val = self._fmt_resistor_value(values.get("R2", 0))
         return textwrap.dedent(f"""
-        <svg width="100%" height="150" viewBox="0 0 600 150" xmlns="http://www.w3.org/2000/svg" style="background:#111; border-radius:8px; display:block; margin:auto;">
-            <text x="20" y="30" fill="#888" font-size="12" font-weight="bold">PI-PAD ATTENUATOR</text>
-            <text x="10" y="75" fill="#fff" font-size="14">IN</text>
-            <text x="570" y="75" fill="#fff" font-size="14">OUT</text>
-            <text x="40" y="95" text-anchor="middle" fill="#888" font-size="10">Zs={zs:.0f}Ω</text>
-            <text x="560" y="95" text-anchor="middle" fill="#888" font-size="10">ZL={zl:.0f}Ω</text>
-            <line x1="60" y1="70" x2="150" y2="70" stroke="#fff" stroke-width="2"/>
-            <line x1="450" y1="70" x2="540" y2="70" stroke="#fff" stroke-width="2"/>
-            <line x1="150" y1="70" x2="150" y2="100" stroke="#fff" stroke-width="2"/>
-            {self._draw_resistor(150, 100, 0, 30, r1_val)}
-            {self._draw_ground(150, 130)}
-            {self._draw_resistor(150, 70, 300, 0, r2_val)}
-            <line x1="450" y1="70" x2="450" y2="100" stroke="#fff" stroke-width="2"/>
-            {self._draw_resistor(450, 100, 0, 30, r1_val)}
-            {self._draw_ground(450, 130)}
+        <svg width="100%" height="220" viewBox="0 0 600 220" xmlns="http://www.w3.org/2000/svg" style="background:#111; border-radius:8px; display:block; margin:auto;">
+            <text x="20" y="40" fill="#888" font-size="16" font-weight="bold">PI-PAD ATTENUATOR</text>
+            <text x="10" y="105" fill="#fff" font-size="18">IN</text>
+            <text x="560" y="105" fill="#fff" font-size="18">OUT</text>
+            <text x="40" y="140" text-anchor="middle" fill="#888" font-size="18">Zs={zs:.0f}Ω</text>
+            <text x="560" y="140" text-anchor="middle" fill="#888" font-size="18">ZL={zl:.0f}Ω</text>
+            <line x1="60" y1="100" x2="150" y2="100" stroke="#fff" stroke-width="3"/>
+            <line x1="450" y1="100" x2="540" y2="100" stroke="#fff" stroke-width="3"/>
+            <line x1="150" y1="100" x2="150" y2="140" stroke="#fff" stroke-width="3"/>
+            {self._draw_resistor(150, 140, 0, 40, r1_val)}
+            {self._draw_ground(150, 180)}
+            {self._draw_resistor(150, 100, 300, 0, r2_val)}
+            <line x1="450" y1="100" x2="450" y2="140" stroke="#fff" stroke-width="3"/>
+            {self._draw_resistor(450, 140, 0, 40, r1_val)}
+            {self._draw_ground(450, 180)}
         </svg>
         """).strip()
 
@@ -218,23 +227,23 @@ class AttenuatorDesigner:
         r2_val = self._fmt_resistor_value(values.get("R2", 0))
         r3_val = self._fmt_resistor_value(values.get("R3", 0))
         return textwrap.dedent(f"""
-        <svg width="100%" height="180" viewBox="0 0 600 180" xmlns="http://www.w3.org/2000/svg" style="background:#111; border-radius:8px; display:block; margin:auto;">
-            <text x="20" y="30" fill="#888" font-size="12" font-weight="bold">BRIDGED-T PAD ATTENUATOR</text>
-            <text x="10" y="75" fill="#fff" font-size="14">IN</text>
-            <text x="570" y="75" fill="#fff" font-size="14">OUT</text>
-            <text x="40" y="95" text-anchor="middle" fill="#888" font-size="10">Zs={zs:.0f}Ω</text>
-            <text x="560" y="95" text-anchor="middle" fill="#888" font-size="10">ZL={zl:.0f}Ω</text>
-            <line x1="60" y1="70" x2="150" y2="70" stroke="#fff" stroke-width="2"/>
-            <line x1="250" y1="70" x2="350" y2="70" stroke="#fff" stroke-width="2"/>
-            <line x1="450" y1="70" x2="540" y2="70" stroke="#fff" stroke-width="2"/>
-            {self._draw_resistor(150, 70, 100, 0, r1_val)}
-            <line x1="300" y1="70" x2="300" y2="100" stroke="#fff" stroke-width="2"/>
-            {self._draw_resistor(300, 100, 0, 30, r2_val)}
-            {self._draw_ground(300, 130)}
-            <line x1="150" y1="70" x2="150" y2="40" stroke="#fff" stroke-width="2"/>
-            <line x1="450" y1="70" x2="450" y2="40" stroke="#fff" stroke-width="2"/>
-            {self._draw_resistor(150, 40, 300, 0, r3_val)}
-            {self._draw_resistor(350, 70, 100, 0, r1_val)}
+        <svg width="100%" height="280" viewBox="0 0 600 280" xmlns="http://www.w3.org/2000/svg" style="background:#111; border-radius:8px; display:block; margin:auto;">
+            <text x="20" y="40" fill="#888" font-size="16" font-weight="bold">BRIDGED-T PAD ATTENUATOR</text>
+            <text x="10" y="145" fill="#fff" font-size="18">IN</text>
+            <text x="560" y="145" fill="#fff" font-size="18">OUT</text>
+            <text x="40" y="180" text-anchor="middle" fill="#888" font-size="18">Zs={zs:.0f}Ω</text>
+            <text x="560" y="180" text-anchor="middle" fill="#888" font-size="18">ZL={zl:.0f}Ω</text>
+            <line x1="60" y1="140" x2="150" y2="140" stroke="#fff" stroke-width="3"/>
+            <line x1="250" y1="140" x2="350" y2="140" stroke="#fff" stroke-width="3"/>
+            <line x1="450" y1="140" x2="540" y2="140" stroke="#fff" stroke-width="3"/>
+            {self._draw_resistor(150, 140, 100, 0, r1_val)}
+            <line x1="300" y1="140" x2="300" y2="180" stroke="#fff" stroke-width="3"/>
+            {self._draw_resistor(300, 180, 0, 40, r2_val)}
+            {self._draw_ground(300, 220)}
+            <line x1="150" y1="140" x2="150" y2="80" stroke="#fff" stroke-width="3"/>
+            <line x1="450" y1="140" x2="450" y2="80" stroke="#fff" stroke-width="3"/>
+            {self._draw_resistor(150, 80, 300, 0, r3_val)}
+            {self._draw_resistor(350, 140, 100, 0, r1_val)}
         </svg>
         """).strip()
 
@@ -246,28 +255,30 @@ class AttenuatorDesigner:
             path = f"M {x},{y} "
             seg_len = length / 6
             for i in range(6):
-                path += f"l {seg_len/2},{(-1 if i%2==0 else 1)*5} "
-                path += f"l {seg_len/2},{(-1 if i%2==0 else 1)*-5} "
+                path += f"l {seg_len/2},{(-1 if i%2==0 else 1)*8} "
+                path += f"l {seg_len/2},{(-1 if i%2==0 else 1)*-8} "
             text_x = x + length / 2
-            text_y = y - 15
+            text_y = y - 25
+            anchor = "middle"
         else: # Vertical
             path = f"M {x},{y} "
             seg_len = height / 6
             for i in range(6):
                 path += f"l {(-1 if i%2==0 else 1)*5},{seg_len/2} "
                 path += f"l {(-1 if i%2==0 else 1)*-5},{seg_len/2} "
-            text_x = x + 25
+            text_x = x + 35
             text_y = y + height / 2
+            anchor = "start"
 
-        return (f'<path d="{path}" fill="none" stroke="{AttenuatorDesigner.RESISTOR_COLOR}" stroke-width="2"/>'
-                f'<text x="{text_x}" y="{text_y}" text-anchor="middle" fill="{AttenuatorDesigner.RESISTOR_COLOR}" font-size="11">{label}</text>')
+        return (f'<path d="{path}" fill="none" stroke="{AttenuatorDesigner.RESISTOR_COLOR}" stroke-width="3"/>'
+                f'<text x="{text_x}" y="{text_y}" text-anchor="{anchor}" fill="{AttenuatorDesigner.RESISTOR_COLOR}" font-size="18">{label}</text>')
 
     @staticmethod
     def _draw_ground(x, y):
-        return (f'<line x1="{x}" y1="{y}" x2="{x}" y2="{y+5}" stroke="#fff" stroke-width="2"/>'
-                f'<line x1="{x-10}" y1="{y+5}" x2="{x+10}" y2="{y+5}" stroke="#fff" stroke-width="1.8" opacity="0.7"/>'
-                f'<line x1="{x-6}" y1="{y+9}" x2="{x+6}" y2="{y+9}" stroke="#fff" stroke-width="1.8" opacity="0.7"/>'
-                f'<line x1="{x-3}" y1="{y+13}" x2="{x+3}" y2="{y+13}" stroke="#fff" stroke-width="1.8" opacity="0.7"/>')
+        return (f'<line x1="{x}" y1="{y}" x2="{x}" y2="{y+8}" stroke="#fff" stroke-width="3"/>'
+                f'<line x1="{x-15}" y1="{y+8}" x2="{x+15}" y2="{y+8}" stroke="#fff" stroke-width="2.5" opacity="0.7"/>'
+                f'<line x1="{x-10}" y1="{y+16}" x2="{x+10}" y2="{y+16}" stroke="#fff" stroke-width="2.5" opacity="0.7"/>'
+                f'<line x1="{x-5}" y1="{y+24}" x2="{x+5}" y2="{y+24}" stroke="#fff" stroke-width="2.5" opacity="0.7"/>')
 
 
 if __name__ == "__main__":

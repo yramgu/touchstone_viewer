@@ -119,19 +119,19 @@ class FirDesigner:
             mag_db = 20 * np.log10(np.maximum(np.abs(h), 1e-10))
             fig_m.add_trace(go.Scatter(x=w, y=mag_db, line=dict(color=TRACE_MAG_COLOR, width=2)))
             fig_m.update_layout(title="Magnitude Response", xaxis_title="Freq (Hz)", yaxis_title="Gain (dB)", height=380, template="plotly_dark")
-            st.plotly_chart(fig_m, use_container_width=True)
+            st.plotly_chart(fig_m, width='stretch')
         
         with col_p:
             fig_p = go.Figure()
             fig_p.add_trace(go.Scatter(x=w, y=np.rad2deg(np.unwrap(np.angle(h))), line=dict(color=TRACE_PHASE_COLOR, width=2)))
             fig_p.update_layout(title="Unwrapped Phase", xaxis_title="Freq (Hz)", yaxis_title="Phase (°)", height=380, template="plotly_dark")
-            st.plotly_chart(fig_p, use_container_width=True)
+            st.plotly_chart(fig_p, width='stretch')
 
         fig_gd = go.Figure()
         gd = -np.gradient(np.unwrap(np.angle(h)), 2 * np.pi * w)
         fig_gd.add_trace(go.Scatter(x=w, y=gd * 1e3, line=dict(color=TRACE_GD_COLOR, width=2)))
         fig_gd.update_layout(title="Group Delay", xaxis_title="Freq (Hz)", yaxis_title="Delay (ms)", height=300, template="plotly_dark")
-        st.plotly_chart(fig_gd, use_container_width=True)
+        st.plotly_chart(fig_gd, width='stretch')
 
         # --- Coefficients & Mathematical Equation ---
         st.markdown("---")
@@ -149,7 +149,7 @@ class FirDesigner:
         with col_taps:
             st.subheader("Filter Taps")
             taps_df = [{"n": i, "Value (b[n])": val} for i, val in enumerate(b)]
-            st.dataframe(taps_df, height=220, use_container_width=True, hide_index=True)
+            st.dataframe(taps_df, height=220, width='stretch', hide_index=True)
             
             csv_out = "n,coefficient\n" + "\n".join([f"{i},{v:.18e}" for i, v in enumerate(b)])
             st.download_button(

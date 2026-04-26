@@ -128,7 +128,7 @@ class LinkBudgetCalculator:
             legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
 if __name__ == "__main__":
     LinkBudgetCalculator().run()
